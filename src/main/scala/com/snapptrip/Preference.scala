@@ -6,9 +6,9 @@ import java.nio.file.Paths
 import akka.{Done, NotUsed}
 import akka.actor.ActorSystem
 import akka.actor.Status.Success
-import akka.stream.ActorMaterializer
+import akka.stream.{ActorMaterializer, IOResult}
 import akka.stream.alpakka.csv.scaladsl.{CsvParsing, CsvToMap}
-import akka.stream.scaladsl.{FileIO, Flow, Framing, Sink}
+import akka.stream.scaladsl.{FileIO, Flow, Framing, Sink, Source}
 import akka.util.ByteString
 
 import scala.collection.immutable
@@ -19,7 +19,7 @@ import scala.util.Try
 case class Pref(userId: Int, itemId: Int)
 
 class Preference(implicit ec: ExecutionContext, materializer: ActorMaterializer, system: ActorSystem) {
-  def readFile(filePath: String) = {
+  def getStream(filePath: String): (Source[Pref, Future[IOResult]]) forSome {type source >: Source[ByteString, Future[IOResult]] <: Source[ByteString, Future[IOResult]]} = {
     val path = Paths.get(filePath)
     val source = FileIO.fromPath(path)
     val toMapFlow: Flow[ByteString, Map[String, String], NotUsed] = CsvParsing.lineScanner()
@@ -40,11 +40,15 @@ class Preference(implicit ec: ExecutionContext, materializer: ActorMaterializer,
           }
         }
     val collectSome = Flow[Option[Pref]].collect { case Some(pref) => pref }
-    source
+    val result=source
       .via(toMapFlow)
       .via(filterFlow)
       .via(collectSome)
-      .runWith(Sink.seq)
+      result
+  }
+
+  def getSeq(filePath: String): Future[immutable.Seq[Pref]] = {
+    getStream(filePath).runWith(Sink.seq)
       .andThen {
         case _ =>
           system.terminate()

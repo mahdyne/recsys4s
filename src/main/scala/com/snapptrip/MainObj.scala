@@ -15,8 +15,8 @@ object MainObj {
     implicit val materializer: ActorMaterializer = ActorMaterializer()
     implicit val executionContext = system.dispatcher
     val pref=new Preference
-    pref.readFile("preferences.csv").onComplete{
-      case Success(r)=>println(r)
+    pref.getSeq("preferences.csv").onComplete{
+      case Success(r)=>Similarity.jaccardSim(r).foreach(println)
       case _=>println("error")
     }
 
